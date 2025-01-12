@@ -1,0 +1,15 @@
+{{define "content"}}
+<article class="post">
+    <header>
+        <h1>{{.Title}}</h1>
+        <div class="meta">
+            By <a href="/{{.Creator.Username}}">{{.Creator.DisplayName}}</a>
+            · {{.Post.CreatedAt | timeAgo}}
+        </div>
+    </header>
+    
+    <div class="content">
+        {{.Content}}
+    </div>
+</article>
+{{end}}

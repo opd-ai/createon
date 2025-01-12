@@ -1,0 +1,19 @@
+{{define "content"}}
+<div class="payment-page">
+    <h1>Subscribe to {{.Creator.DisplayName}}</h1>
+    
+    <div class="tier-details">
+        <h2>{{.Content.Name}}</h2>
+        <p>{{.Content.Description}}</p>
+        <div class="price">
+            {{.Content.PriceBTC | formatPrice "BTC"}}
+        </div>
+    </div>
+    
+    <div class="payment-info" id="payment-details">
+        <!-- Populated via JavaScript -->
+    </div>
+</div>
+
+<script src="/assets/js/payment.js"></script>
+{{end}}

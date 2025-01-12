@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Createon</title>
+    <link rel="stylesheet" href="/assets/css/main.css">
+    {{block "head" .}}{{end}}
+</head>
+<body>
+    <nav class="nav">
+        <div class="container">
+            <a href="/" class="nav-brand">Createon</a>
+            {{if .User}}
+                <a href="/dashboard">Dashboard</a>
+                <a href="/logout">Logout</a>
+            {{else}}
+                <a href="/login">Login</a>
+            {{end}}
+        </div>
+    </nav>
+
+    {{if .Flash}}
+    <div class="flash">{{.Flash}}</div>
+    {{end}}
+
+    <main class="container">
+        {{block "content" .}}{{end}}
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>Powered by Createon</p>
+        </div>
+    </footer>
+</body>
+</html>
