@@ -3,6 +3,7 @@ module github.com/opd-ai/createon
 go 1.21.3
 
 require (
+	github.com/go-chi/chi/v5 v5.2.0
 	github.com/google/uuid v1.4.0
 	github.com/opd-ai/paywall v0.0.0-20250112175915-1f438cd5daaa
 	github.com/spf13/cobra v1.8.1
