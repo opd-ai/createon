@@ -1,21 +1,27 @@
 # Goal-Achievement Assessment
 
+Generated: 2026-03-18
+
 ## Project Context
 
-- **What it claims to do**: Createon is a self-hosted Patreon alternative that enables creators to monetize content using cryptocurrency (Bitcoin and Monero), with flat-file storage, tiered subscriptions, markdown content support, and automated payment verification.
+- **What it claims to do**: Createon is a self-hosted Patreon alternative enabling creators to monetize content using cryptocurrency (Bitcoin and Monero), with flat-file storage, tiered subscriptions, markdown content support, content versioning, tags/categories, and automated payment verification.
 
-- **Target audience**: Privacy-conscious creators who want independence from mainstream platforms, and supporters who prefer cryptocurrency payments. Technical users comfortable with self-hosting.
+- **Target audience**: Privacy-conscious creators seeking independence from mainstream platforms, and supporters who prefer cryptocurrency payments. Technical users comfortable with self-hosting Go applications and running cryptocurrency nodes.
 
 - **Architecture**:
   | Package | Role |
   |---------|------|
   | `createon` (root) | Core types (Creator, Tier, Post, Subscription, Payment), config loading, interfaces |
-  | `pkg/cli` | Cobra CLI commands (server, creator management) |
-  | `pkg/files` | Thread-safe flat-file storage manager with atomic writes |
-  | `pkg/subscription` | Subscription lifecycle and payment verification |
-  | `pkg/templates` | HTML template rendering with goldmark Markdown support |
+  | `pkg/auth` | User authentication and session management (register, login, logout) |
+  | `pkg/cli` | Cobra CLI commands (server, creator, post, subscription, backup) |
+  | `pkg/files` | Thread-safe flat-file storage manager with atomic writes and per-path RWMutex |
+  | `pkg/subscription` | Subscription lifecycle, payment verification, tier-based access control |
+  | `pkg/templates` | HTML template rendering with goldmark Markdown support (GFM, typographer) |
 
-- **Existing CI/quality gates**: None. No GitHub Actions workflows, no `.gitlab-ci.yml`. Makefile only has `build`, `fmt`, and `doc` targets.
+- **Existing CI/quality gates**:
+  - `.github/workflows/ci.yml`: Runs `go build`, `go vet`, `go test -race` on push/PR
+  - `Makefile`: `build`, `fmt`, `doc` targets
+  - No coverage thresholds enforced
 
 ---
 
@@ -23,163 +29,31 @@
 
 | Stated Goal | Status | Evidence | Gap Description |
 |-------------|--------|----------|-----------------|
-| **Bitcoin (BTC) payments** | ⚠️ Partial | `CreateSubscription` generates BTC addresses via `opd-ai/paywall`; no BTC-specific RPC config exposed | No configurable BTC node connection; testnet hardcoded |
-| **Monero (XMR) payments** | ⚠️ Partial | `getXMRConfig()` returns hardcoded localhost:18081; paywall dependency supports XMR | No runtime config for XMR RPC credentials |
-| **Configurable payment timeouts** | ⚠️ Partial | `Config.Paywall.Timeout` exists but unused; hardcoded `24 * time.Hour` in `CreateSubscription` | Timeout config not wired through |
-| **Automatic payment verification** | ✅ Achieved | `ProcessPayment` checks paywall store status, updates subscription on confirmation | Works via paywall middleware |
-| **Multiple subscription tiers** | ✅ Achieved | `Creator.Tiers` slice with BTC/XMR pricing per tier; CLI supports `-t` flag | |
-| **Markdown content support** | ✅ Achieved | `goldmark` with GFM, typographer, auto heading IDs; `RenderMarkdown()` | |
-| **Custom pricing per tier** | ✅ Achieved | `Tier.PriceBTC`, `Tier.PriceXMR` floats per tier | |
-| **Profile customization** | ⚠️ Partial | `Creator` struct has `DisplayName`, `Bio`, `AvatarPath`, `SocialLinks` | No upload endpoint for avatars; social links not rendered |
-| **Markdown-based posts** | ✅ Achieved | Posts stored as `{post-id}.md` files; rendered via templates | |
-| **Tier-restricted content** | ✅ Achieved | `VerifyAccess` checks subscription tier hierarchy before serving posts | |
-| **Content versioning** | ❌ Missing | README claims it; no implementation found | No version history or diff capability |
-| **Tags and categories** | ⚠️ Partial | `Post.Tags` field exists; `PostFilter.Tags` defined | No CLI/API to filter by tags; not rendered in UI |
-| **Automated payment processing** | ✅ Achieved | Paywall middleware integration with file-based store | |
-| **Tier-based access control** | ✅ Achieved | `tierIncludesAccess()` implements tier hierarchy (higher tier ≥ lower tiers) | |
-| **Subscription expiration handling** | ✅ Achieved | `ExpiresAt` field checked in `verifyAccessImpl` | |
-| **Payment status tracking** | ✅ Achieved | `Payment.Status` persisted in YAML; updated on confirmation | |
-| **No database required** | ✅ Achieved | All data in YAML files under `data/` directory | |
-| **Simple backup/restore** | ❌ Missing | README shows `createon backup create/restore` commands; CLI commands not implemented | |
-| **Portable deployments** | ✅ Achieved | Flat-file architecture inherently portable | |
-| **Thread-safe operations** | ✅ Achieved | `files.Manager` uses per-path RWMutex; atomic writes via temp file + rename | |
-| **CLI creator management** | ✅ Achieved | `creator add`, `creator list` implemented in `pkg/cli/creator.go` | |
-| **CLI post publishing** | ❌ Missing | README shows `createon post publish`; not implemented | |
-| **CLI subscription management** | ❌ Missing | README shows `createon sub verify/list`; not implemented | |
-| **Web server** | ⚠️ Partial | Server starts, routes defined; but `main.go` is empty (cannot build) | **Critical**: Entry point missing |
-| **User session management** | ❌ Missing | TODO comments at lines 249, 274 in `server.go`; hardcoded `user@example.com` | No auth/session system |
+| **Bitcoin (BTC) payments** | ✅ Achieved | `CreateSubscription` generates BTC addresses via `opd-ai/paywall`; config supports BTC host | — |
+| **Monero (XMR) payments** | ✅ Achieved | `getXMRConfig()` reads host/user/password from config; XMR addresses generated | — |
+| **Configurable payment timeouts** | ✅ Achieved | `Config.Paywall.Timeout` parsed in `config.go`, used in `CreateSubscription` | — |
+| **Automatic payment verification** | ✅ Achieved | `ProcessPayment` checks paywall store status, updates subscription on confirmation | — |
+| **Multiple subscription tiers** | ✅ Achieved | `Creator.Tiers` slice with BTC/XMR pricing; CLI `-t` flag parses tier specs | — |
+| **Markdown content support** | ✅ Achieved | `goldmark` with GFM, typographer, auto heading IDs; `RenderMarkdown()` | — |
+| **Custom pricing per tier** | ✅ Achieved | `Tier.PriceBTC`, `Tier.PriceXMR` floats per tier | — |
+| **Profile customization** | ⚠️ Partial | `Creator.AvatarPath`, `SocialLinks` fields exist; template renders them | No upload endpoint; no CLI flags for avatar/social |
+| **Markdown-based posts** | ✅ Achieved | Posts stored as `{post-id}.md` files; rendered via templates | — |
+| **Tier-restricted content** | ✅ Achieved | `VerifyAccess` checks subscription tier hierarchy before serving posts | — |
+| **Content versioning** | ❌ Missing | README claims this feature | No version history mechanism; posts overwrite |
+| **Tags and categories** | ⚠️ Partial | `Post.Tags` field, `--tags` CLI flag implemented | No filtering by tags; not rendered in templates |
+| **Automated payment processing** | ✅ Achieved | Paywall middleware integration with file-based store | — |
+| **Tier-based access control** | ✅ Achieved | `tierIncludesAccess()` implements hierarchy (higher ≥ lower) | — |
+| **Subscription expiration handling** | ✅ Achieved | `ExpiresAt` field checked in `verifyAccessImpl` | — |
+| **Payment status tracking** | ✅ Achieved | `Payment.Status` persisted in YAML; updated on confirmation | — |
+| **No database required** | ✅ Achieved | All data in YAML files under `data/` directory | — |
+| **Simple backup/restore** | ✅ Achieved | `createon backup create` and `backup restore` implemented | — |
+| **Portable deployments** | ✅ Achieved | Flat-file architecture inherently portable | — |
+| **Thread-safe operations** | ✅ Achieved | `files.Manager` uses per-path RWMutex; atomic writes via temp+rename | — |
+| **CLI creator management** | ✅ Achieved | `creator add`, `creator list` in `pkg/cli/creator.go` | — |
+| **CLI post publishing** | ✅ Achieved | `post publish` with title, tier, tags flags | — |
+| **CLI subscription management** | ✅ Achieved | `sub verify`, `sub list` in `pkg/cli/subscription.go` | — |
 
-**Overall: 12/23 goals fully achieved (52%)**
-
----
-
-## Critical Finding: Project Cannot Build
-
-The entry point `cmd/createon/main.go` is **empty** (contains only a newline). This means:
-- `go build ./cmd/createon` fails
-- The CLI documented in README cannot be run
-- All CLI commands exist but are unreachable
-
----
-
-## Roadmap
-
-### Priority 1: Make the Project Buildable (Critical)
-
-The project cannot be used at all without a working entry point.
-
-- [ ] **Create `cmd/createon/main.go`** with package declaration and main function calling `cli.Execute()`
-  ```go
-  package main
-  
-  import (
-      "log"
-      "github.com/opd-ai/createon/pkg/cli"
-  )
-  
-  func main() {
-      if err := cli.Execute(); err != nil {
-          log.Fatal(err)
-      }
-  }
-  ```
-- [ ] **Validation**: `go build -o createon ./cmd/createon/main.go` succeeds; `./createon --help` shows subcommands
-
----
-
-### Priority 2: Implement Documented CLI Commands
-
-README documents commands that don't exist, creating a trust gap with users.
-
-- [ ] **Implement `post` subcommand** (`pkg/cli/post.go`)
-  - `post publish [username] [file.md] -t [title] -r [tier]`
-  - Should create `{post-id}.md` and `metadata.yaml` in `data/creators/{username}/posts/`
-- [ ] **Implement `sub` subcommand** (`pkg/cli/subscription.go`)
-  - `sub verify [email] [creator] [tier]` — calls `VerifyAccess`
-  - `sub list [creator]` — calls `GetActiveSubscriptions`
-- [ ] **Implement `backup` subcommand** (`pkg/cli/backup.go`)
-  - `backup create [file.tar.gz]` — tar/gzip `data/` directory
-  - `backup restore [file.tar.gz]` — extract to `data/`
-- [ ] **Validation**: Each command runs without error; documented examples from README work
-
----
-
-### Priority 3: User Authentication and Sessions
-
-Content access checks currently use hardcoded `user@example.com`. No login/logout exists.
-
-- [ ] **Design session system** (cookie-based or JWT)
-- [ ] **Implement `/login` and `/logout` routes** referenced in `base.html`
-- [ ] **Implement `/dashboard` route** referenced in `base.html`
-- [ ] **Wire user email from session** into `handleViewPost` and `handleSubscribe`
-- [ ] **Validation**: User can log in, subscribe, and access tier-restricted content
-
----
-
-### Priority 4: Wire Configuration Through
-
-Config fields exist but are ignored at runtime.
-
-- [ ] **Use `Config.Paywall.Timeout`** instead of hardcoded `24 * time.Hour` in `CreateSubscription`
-- [ ] **Make XMR RPC configurable** — add `XMRHost`, `XMRUser`, `XMRPassword` to `Config.Paywall`; use in `getXMRConfig()`
-- [ ] **Make BTC RPC configurable** — similar pattern for Bitcoin node connection
-- [ ] **Remove hardcoded `TestNet: true`** — read from config
-- [ ] **Validation**: Changing `config/server.yaml` values affects runtime behavior
-
----
-
-### Priority 5: Implement Content Versioning
-
-README claims "content versioning" but no implementation exists.
-
-- [ ] **Design versioning approach** (options: git-style history per post, or simple `{post-id}_v{n}.md` naming)
-- [ ] **Implement version storage** in posts directory
-- [ ] **Add `post history` CLI command** to list versions
-- [ ] **Validation**: Editing a post creates a new version; old versions are retrievable
-
----
-
-### Priority 6: Complete Tags/Categories Feature
-
-Post model has tags but they're never used.
-
-- [ ] **Render tags in `post.html` template**
-- [ ] **Add tag filter to CLI** (`post list --tag=art`)
-- [ ] **Add `/c/{username}/tags/{tag}` route** to filter posts by tag
-- [ ] **Validation**: Creating post with tags → tags visible on page → filtering works
-
----
-
-### Priority 7: Profile Customization Completion
-
-Avatar and social links fields exist but aren't functional.
-
-- [ ] **Add avatar upload** via CLI or web form
-- [ ] **Render `Creator.SocialLinks`** in profile template
-- [ ] **Serve avatar files** from `data/creators/{username}/avatar.*`
-- [ ] **Validation**: Creator profile shows avatar and clickable social links
-
----
-
-### Priority 8: Add Basic CI/Testing
-
-No tests exist; no CI runs.
-
-- [ ] **Add unit tests** for `pkg/files/Manager` (atomic writes, locking)
-- [ ] **Add unit tests** for `pkg/subscription` (tier hierarchy, expiration)
-- [ ] **Create `.github/workflows/ci.yml`** running `go test ./...` and `go vet ./...`
-- [ ] **Validation**: CI passes on push; `go test ./...` has >0 test functions
-
----
-
-### Priority 9: Code Quality Improvements (Lower Impact)
-
-Based on `go-stats-generator` findings:
-
-- [ ] **Extract duplicated atomic write logic** in `pkg/files/manager.go:76-100` and `145-167` into shared helper
-- [ ] **Add GoDoc comments** to exported functions `LoadConfig`, `Execute`, `NewManager`
-- [ ] **Reduce `ProcessPayment` complexity** (cyclomatic: 13, nesting: 5) by extracting subscription-finding loop
-- [ ] **Validation**: Re-run `go-stats-generator`; no function >15 complexity; doc coverage >60%
+**Overall: 20/23 goals fully achieved (87%)**
 
 ---
 
@@ -187,32 +61,196 @@ Based on `go-stats-generator` findings:
 
 | Metric | Value |
 |--------|-------|
-| Lines of Code | 696 |
-| Functions | 11 |
-| Methods | 28 |
-| Packages | 5 |
-| Test Files | 0 |
-| Avg Function Length | 22.7 lines |
-| High Complexity (>10) | 1 function (`ProcessPayment`: 19.4) |
-| Doc Coverage | 42.1% |
-| Code Duplication | 2.64% (35 lines) |
-| TODOs in Code | 3 |
+| Lines of Code | 1,186 |
+| Total Functions | 29 |
+| Total Methods | 43 |
+| Packages | 7 |
+| Test Files | 2 |
+| Avg Function Length | 20.7 lines |
+| High Complexity (>10) | 1 function (`CreateSubscription`: 15.3) |
+| Code Duplication | 0.42% (10 lines) |
+| Test Coverage (pkg/files) | 78.7% |
+| Test Coverage (pkg/subscription) | 30.0% |
+| Test Coverage (pkg/auth) | 0.0% |
+| Test Coverage (pkg/cli) | 0.0% |
+
+---
+
+## Roadmap
+
+### Priority 1: Implement Content Versioning
+
+**Gap**: README claims "Content versioning" but no implementation exists. Posts are overwritten on update.
+
+**Impact**: Creators cannot revert mistakes or view edit history—a significant feature gap for a content platform.
+
+**Implementation**:
+- [ ] Add `Version int` field to `Post` struct (`types.go`)
+- [ ] Create versioned storage: `data/creators/{username}/posts/{post-id}/v{n}.md`
+- [ ] Modify post update logic to increment version and preserve previous file
+- [ ] Add `post history [username] [post-id]` CLI command to list versions with timestamps
+- [ ] Add `post revert [username] [post-id] [version]` CLI command to restore
+- [ ] Implement `GetPostVersion(ctx, username, postID, version)` in `ContentManager` interface
+
+**Validation**: Edit a post multiple times → `post history` shows all versions → `post revert` restores content
+
+**Files to modify**:
+- `types.go`: Add `Version` field
+- `interfaces.go`: Add version methods to `ContentManager`
+- `pkg/files/manager.go`: Implement version storage
+- `pkg/cli/post.go`: Add `history` and `revert` subcommands
+
+---
+
+### Priority 2: Complete Tags Feature
+
+**Gap**: Tags can be set via CLI but cannot be displayed or filtered.
+
+**Impact**: Users cannot discover content by topic—tags exist but serve no functional purpose.
+
+**Implementation**:
+- [ ] Render tags in `templates/post.html`:
+  ```html
+  {{if .Post.Tags}}
+  <div class="tags">
+      {{range .Post.Tags}}<a href="/c/{{$.Creator.Username}}/tags/{{.}}" class="tag">{{.}}</a>{{end}}
+  </div>
+  {{end}}
+  ```
+- [ ] Add route `GET /c/{username}/tags/{tag}` in `pkg/cli/server.go`
+- [ ] Implement tag filtering in `ListPosts()` using `PostFilter.Tags`
+- [ ] Add `post list --tag=<tag>` CLI flag to filter posts
+- [ ] Add tag cloud/list to creator profile page
+
+**Validation**: Create posts with tags → tags visible on post page → clicking tag filters posts
+
+**Files to modify**:
+- `templates/post.html`: Render tags
+- `templates/profile.html`: Add tag cloud section
+- `pkg/cli/server.go`: Add tag route handler
+- `pkg/files/manager.go`: Implement tag filtering in `ListPosts`
+
+---
+
+### Priority 3: Complete Profile Customization
+
+**Gap**: Avatar and social link fields exist but cannot be set through CLI or web interface.
+
+**Impact**: Creators cannot personalize their profiles through documented interfaces.
+
+**Implementation**:
+- [ ] Add `-a/--avatar` flag to `creator add` command (`pkg/cli/creator.go`)
+- [ ] Add `-s/--social` flag (comma-separated URLs) to `creator add`
+- [ ] Add `POST /c/{username}/avatar` endpoint for file uploads
+- [ ] Store uploaded avatars to `data/creators/{username}/avatar.{ext}`
+- [ ] Serve avatar files via static file handler at `/assets/avatars/`
+- [ ] Add `creator update` command for modifying existing profiles
+
+**Validation**: `creator add --avatar=./photo.jpg --social="twitter.com/x,github.com/y"` → profile shows both
+
+**Files to modify**:
+- `pkg/cli/creator.go`: Add flags and update logic
+- `pkg/cli/server.go`: Add avatar upload endpoint and static serving
+
+---
+
+### Priority 4: Expand Test Coverage
+
+**Gap**: Only 2 of 5 packages have tests; critical paths like authentication have 0% coverage.
+
+**Impact**: Refactoring and feature additions carry higher regression risk.
+
+**Implementation**:
+- [ ] Add unit tests for `pkg/auth`:
+  - `TestRegisterUser` (success, duplicate email)
+  - `TestLoginUser` (success, wrong password, no user)
+  - `TestSessionManagement` (create, validate, expire)
+  - Target: 70% coverage
+- [ ] Add integration tests for `pkg/cli`:
+  - `TestCreatorAddCommand`
+  - `TestPostPublishCommand`
+  - `TestBackupRestoreRoundtrip`
+- [ ] Add template tests for `pkg/templates`:
+  - `TestRenderMarkdown` (GFM features, edge cases)
+  - `TestTemplateExecution` (all templates render without error)
+- [ ] Update CI to enforce coverage threshold:
+  ```yaml
+  - name: Test with coverage
+    run: go test -coverprofile=coverage.out ./...
+  - name: Check coverage
+    run: |
+      COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+      if (( $(echo "$COVERAGE < 50" | bc -l) )); then exit 1; fi
+  ```
+
+**Validation**: `go test -cover ./...` reports >50% overall, >70% on `pkg/auth`
+
+**Files to create**:
+- `pkg/auth/auth_test.go`
+- `pkg/cli/cli_test.go`
+- `pkg/templates/templates_test.go`
+
+---
+
+### Priority 5: Reduce Code Complexity
+
+**Gap**: `CreateSubscription` has cyclomatic complexity 15.3 (highest in codebase).
+
+**Impact**: High-complexity functions are harder to test and more prone to bugs.
+
+**Implementation**:
+- [ ] Extract `generatePaymentAddresses()` helper from `CreateSubscription`
+- [ ] Extract `findSubscriptionForPayment()` from `ProcessPayment`
+- [ ] Extract duplicated atomic write logic (`pkg/files/manager.go:135-144` and `167-176`) into shared `writeAtomically()` helper
+- [ ] Target: No function with complexity >12
+
+**Validation**: `go-stats-generator analyze . --skip-tests` shows 0 functions with complexity >12
+
+**Files to modify**:
+- `pkg/subscription/manager.go`: Refactor `CreateSubscription`, `ProcessPayment`
+- `pkg/files/manager.go`: Extract `writeAtomically()` helper
 
 ---
 
 ## Dependency Notes
 
-- **Go 1.21.3**: Supported until Go 1.25 release (~Feb 2027)
-- **go-monero-rpc-client**: Community maintained; no known CVEs; consider pinning version
-- **btcd v0.24.2**: Stable Bitcoin library; well-maintained
+| Dependency | Version | Status | Notes |
+|------------|---------|--------|-------|
+| Go | 1.21.3 | ✅ Current | Supported until ~Feb 2027 |
+| btcd | v0.24.2 | ✅ Secure | Fixes CVE-2024-38365; no newer CVEs |
+| go-monero-rpc-client | Dec 2024 | ✅ Maintained | No known vulnerabilities; Monero RPC now 100% fuzz coverage |
+| cobra | v1.8.1 | ✅ Current | Stable CLI framework |
+| goldmark | v1.7.8 | ✅ Current | Active development |
+| chi | v5.2.0 | ✅ Current | Lightweight router |
+
+**No dependency updates required at this time.**
 
 ---
 
 ## Competitive Context
 
-Createon's unique value proposition vs alternatives:
-- **vs Ghost**: Native crypto support (Ghost requires manual integration)
-- **vs NotOnlyFans**: Supports Monero (privacy coin) in addition to BTC
-- **Differentiator**: Flat-file simplicity; no database setup required
+| Feature | Createon | Ghost | Cloud Patron |
+|---------|----------|-------|--------------|
+| Native BTC support | ✅ | ❌ (plugin) | 🚧 Planned |
+| Native XMR support | ✅ | ❌ | ❌ |
+| Self-hosted | ✅ | ✅ | ✅ |
+| No database required | ✅ | ❌ (SQLite/MySQL) | ❌ |
+| Platform fees | 0% | 0% | 0% |
+| Content versioning | ❌ (planned) | ✅ | ❌ |
+| Web UI for management | ❌ (CLI) | ✅ | ✅ |
 
-To maintain competitive position, priorities 1-3 (buildable binary, documented CLI, user sessions) are essential for any real-world use.
+**Createon's unique differentiator**: Native dual-crypto support (BTC + XMR) with privacy-focused Monero option, combined with zero-database flat-file simplicity. This positions it for privacy-conscious creators who prioritize self-sovereignty over UX polish.
+
+---
+
+## Summary
+
+Createon is **87% complete** relative to its stated goals. The core payment flows (BTC, XMR), subscription management, access control, and backup/restore are fully functional. The project is ready for early adopters.
+
+**Remaining gaps to close**:
+1. **Content versioning** (P1) — Claimed but not implemented
+2. **Tag filtering/display** (P2) — Data structure exists, no UI/routing
+3. **Profile customization** (P3) — Fields exist, no upload/CLI support
+4. **Test coverage** (P4) — 40% of packages have tests
+
+Completing Priorities 1-3 would bring the project to 100% of its stated feature set. Priority 4-5 improve maintainability and reduce regression risk.
