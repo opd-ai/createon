@@ -52,7 +52,7 @@ func runAddCreator(cmd *cobra.Command, args []string) error {
 
 	// Create creator directory
 	creatorDir := filepath.Join("data", "creators", username)
-	if err := os.MkdirAll(creatorDir, 0755); err != nil {
+	if err := os.MkdirAll(creatorDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create creator directory: %w", err)
 	}
 

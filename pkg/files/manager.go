@@ -25,7 +25,7 @@ func NewManager(rootDir string) (*Manager, error) {
 		return nil, fmt.Errorf("invalid root directory: %w", err)
 	}
 
-	if err := os.MkdirAll(absPath, 0755); err != nil {
+	if err := os.MkdirAll(absPath, 0o755); err != nil {
 		return nil, fmt.Errorf("could not create root directory: %w", err)
 	}
 
@@ -81,7 +81,7 @@ func (m *Manager) WriteYAML(path string, v interface{}) error {
 
 	// Create temporary file
 	dir := filepath.Dir(fullPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
@@ -149,7 +149,7 @@ func (m *Manager) WriteFile(path string, data []byte) error {
 	defer lock.Unlock()
 
 	dir := filepath.Dir(fullPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 

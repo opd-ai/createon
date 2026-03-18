@@ -74,7 +74,6 @@ func NewManager(cfg TemplateConfig) (*Manager, error) {
 			return time.Since(t).Round(time.Second).String()
 		},
 	}).ParseGlob(filepath.Join(cfg.TemplatesDir, "*.html"))
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
