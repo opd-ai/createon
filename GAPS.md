@@ -33,7 +33,7 @@
 ## Profile Customization CLI
 
 - **Stated Goal**: README claims "Profile customization" under Creator Management. Creators should be able to set avatars and social links.
-- **Current State**: `Creator` struct has `AvatarPath string` and `SocialLinks []string` fields in `types.go:15-16`. Template `templates/profile.html:4-16` renders these fields when present. However, `creator add` command in `pkg/cli/creator.go:28-30` has no flags for avatar or social links. No `creator update` command exists. No web endpoint for avatar upload.
+- **Current State**: `Creator` struct has `AvatarPath string` and `SocialLinks []string` fields in `types.go:15-16`. Template `templates/profile.html:4-16` renders these fields when present. However, `creator add` command in `pkg/cli/creator.go:27-29` has no flags for avatar or social links. No `creator update` command exists. No web endpoint for avatar upload.
 - **Impact**: Creators must manually edit YAML files to set profile images and social links, which defeats the purpose of a user-friendly CLI-driven platform.
 - **Closing the Gap**:
   1. Add `-a/--avatar` flag to `creator add` command in `pkg/cli/creator.go`
@@ -47,7 +47,7 @@
 ## Production-Grade Password Hashing
 
 - **Stated Goal**: Security Considerations section advises "Keep private keys safely stored" and general security best practices. Implicit goal is secure user authentication.
-- **Current State**: `pkg/auth/auth.go:191-196` uses SHA256 with a static salt for password hashing. A comment on line 193 explicitly acknowledges: "In production, use bcrypt or argon2".
+- **Current State**: `pkg/auth/auth.go:189-196` uses SHA256 with a static salt for password hashing. A comment on line 191 explicitly acknowledges: "In production, use bcrypt or argon2".
 - **Impact**: SHA256 with static salt is vulnerable to rainbow table attacks and lacks the adaptive cost factor needed for password security. This is a known issue documented in the code itself.
 - **Closing the Gap**:
   1. Add dependency: `go get golang.org/x/crypto/bcrypt`

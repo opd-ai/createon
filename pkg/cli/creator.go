@@ -1,4 +1,3 @@
-// pkg/cli/creator.go
 package cli
 
 import (

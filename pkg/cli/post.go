@@ -1,4 +1,3 @@
-// Package cli provides command-line interface commands for the Createon platform.
 package cli
 
 import (

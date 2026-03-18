@@ -19,7 +19,7 @@ Createon is a self-hosted alternative to Patreon that claims to:
 | Bitcoin (BTC) payments | ✅ Achieved | `pkg/subscription/manager.go:72-87` — `CreateSubscription` generates BTC addresses via paywall |
 | Monero (XMR) payments | ✅ Achieved | `pkg/subscription/manager.go:124-148` — `getXMRConfig()` reads XMR host/credentials |
 | Configurable payment timeouts | ✅ Achieved | `pkg/subscription/manager.go:58-63` — parses `cfg.Paywall.Timeout` duration |
-| Automatic payment verification | ✅ Achieved | `pkg/subscription/manager.go:193-215` — `ProcessPayment` checks paywall store status |
+| Automatic payment verification | ✅ Achieved | `pkg/subscription/manager.go:192-215` — `ProcessPayment` checks paywall store status |
 | Multiple subscription tiers | ✅ Achieved | `types.go:19` — `Creator.Tiers []Tier` with BTC/XMR pricing |
 | Markdown content support | ✅ Achieved | `pkg/templates/manager.go:39-53` — goldmark with GFM, typographer extensions |
 | Custom pricing per tier | ✅ Achieved | `types.go:29-30` — `Tier.PriceBTC` and `Tier.PriceXMR` floats |
@@ -52,9 +52,9 @@ Createon is a self-hosted alternative to Patreon that claims to:
 
 - [ ] **Content versioning not implemented** — `pkg/cli/post.go:81-83` — README claims "Content versioning" but posts are stored as single files that get overwritten on update. No version history, no `GetPostVersion()` method, no CLI commands for history or revert. — **Remediation:** Add `Version int` field to `Post` struct in `types.go`. Implement versioned storage structure `data/creators/{username}/posts/{post-id}/v{n}.md`. Add `GetPostVersion(ctx, username, postID, version)` to `ContentManager` interface. Add `post history` and `post revert` CLI subcommands in `pkg/cli/post.go`. Validation: `go test ./pkg/files/... && go build ./cmd/createon && createon post history testuser test-post-id`
 
-- [ ] **Weak password hashing algorithm** — `pkg/auth/auth.go:191-196` — Uses SHA256 with static salt instead of bcrypt/argon2. Comment on line 193 acknowledges this: "In production, use bcrypt or argon2". This is a known issue, not a false positive. — **Remediation:** Replace `hashPassword()` with `golang.org/x/crypto/bcrypt.GenerateFromPassword()` and `bcrypt.CompareHashAndPassword()`. Update `Login()` to use constant-time comparison. Validation: `go test ./pkg/auth/... -v`
+- [ ] **Weak password hashing algorithm** — `pkg/auth/auth.go:189-196` — Uses SHA256 with static salt instead of bcrypt/argon2. Comment on line 191 acknowledges this: "In production, use bcrypt or argon2". This is a known issue, not a false positive. — **Remediation:** Replace `hashPassword()` with `golang.org/x/crypto/bcrypt.GenerateFromPassword()` and `bcrypt.CompareHashAndPassword()`. Update `Login()` to use constant-time comparison. Validation: `go test ./pkg/auth/... -v`
 
-- [ ] **Profile customization incomplete** — `pkg/cli/creator.go:28-30` — `AvatarPath` and `SocialLinks` fields exist in `Creator` struct and template renders them, but no CLI flags (`-a/--avatar`, `-s/--social`) to set them. No web endpoint for avatar upload. — **Remediation:** Add flags to `creator add` command: `addCmd.Flags().StringP("avatar", "a", "", "avatar file path")` and `addCmd.Flags().StringSliceP("social", "s", []string{}, "social links")`. Wire them in `runAddCreator()`. Validation: `createon creator add testuser -n "Test" -a ./avatar.png -s "github.com/test"`
+- [ ] **Profile customization incomplete** — `pkg/cli/creator.go:27-29` — `AvatarPath` and `SocialLinks` fields exist in `Creator` struct and template renders them, but no CLI flags (`-a/--avatar`, `-s/--social`) to set them. No web endpoint for avatar upload. — **Remediation:** Add flags to `creator add` command: `addCmd.Flags().StringP("avatar", "a", "", "avatar file path")` and `addCmd.Flags().StringSliceP("social", "s", []string{}, "social links")`. Wire them in `runAddCreator()`. Validation: `createon creator add testuser -n "Test" -a ./avatar.png -s "github.com/test"`
 
 ### MEDIUM
 
@@ -64,7 +64,7 @@ Createon is a self-hosted alternative to Patreon that claims to:
   ```
   Add route handler in `pkg/cli/server.go` for `GET /c/{username}/tags/{tag}`. Implement `ListPostsByTag()` using `PostFilter.Tags`. Validation: `curl http://localhost:8080/c/testuser/tags/tutorial`
 
-- [ ] **Zero test coverage on critical auth package** — `pkg/auth/auth.go:1-207` — Authentication package has 0% test coverage. Contains security-critical code for registration, login, session management. — **Remediation:** Create `pkg/auth/auth_test.go` with tests for `Register()`, `Login()`, `ValidateSession()`, `Logout()`, and `Middleware()`. Target >70% coverage. Validation: `go test -cover ./pkg/auth/...`
+- [ ] **Zero test coverage on critical auth package** — `pkg/auth/auth.go:1-205` — Authentication package has 0% test coverage. Contains security-critical code for registration, login, session management. — **Remediation:** Create `pkg/auth/auth_test.go` with tests for `Register()`, `Login()`, `ValidateSession()`, `Logout()`, and `Middleware()`. Target >70% coverage. Validation: `go test -cover ./pkg/auth/...`
 
 - [ ] **High complexity in CreateSubscription** — `pkg/subscription/manager.go:37-122` — Cyclomatic complexity 15.3 (highest in codebase). 84 lines with payment address generation, config parsing, paywall setup, and subscription creation mixed together. — **Remediation:** Extract `generatePaymentAddresses()` helper function. Extract `parseTimeoutDuration()` helper. Move paywall configuration to a separate `configurePaywall()` method. Target complexity <12. Validation: `go-stats-generator analyze . --skip-tests --format json | grep CreateSubscription`
 
@@ -76,7 +76,7 @@ Createon is a self-hosted alternative to Patreon that claims to:
 
 - [ ] **Package name doesn't match directory** — Root package is `createon` but directory is also `createon` (correct), however the package documentation mentions this as a naming convention violation. — **Remediation:** No action required; this is a false positive from the analyzer. The package name correctly matches the module path.
 
-- [ ] **CLI package has high coupling** — `pkg/cli/server.go:1-495` — 10 dependencies, coupling score 5.0. HTTP handlers, CLI commands, and server setup mixed in one package. — **Remediation:** Consider future extraction of HTTP handlers into `pkg/handlers/` package if the codebase grows significantly. Current size (1125 lines) is manageable. No immediate action required.
+- [ ] **CLI package has high coupling** — `pkg/cli/server.go:1-493` — 10 dependencies, coupling score 5.0. HTTP handlers, CLI commands, and server setup mixed in one package. — **Remediation:** Consider future extraction of HTTP handlers into `pkg/handlers/` package if the codebase grows significantly. Current size (1125 lines) is manageable. No immediate action required.
 
 ## Metrics Snapshot
 

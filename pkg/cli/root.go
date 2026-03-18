@@ -1,5 +1,3 @@
-// Package cli provides the command-line interface for the Createon platform.
-// It implements commands for server management, creator management, and content operations.
 package cli
 
 import (

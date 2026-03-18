@@ -14,13 +14,13 @@ Createon is a self-hosted alternative to Patreon that enables creators to moneti
   - Multiple subscription tiers
   - Markdown content support
   - Custom pricing per tier
-  - Profile customization
+  - Profile customization <!-- REVIEW: Fields exist but no CLI/upload support. See GAPS.md. -->
 
 - **Content Management**
   - Markdown-based posts
   - Tier-restricted content
-  - Content versioning
-  - Tags and categories
+  - Content versioning <!-- REVIEW: Not currently implemented. See GAPS.md for implementation plan. -->
+  - Tags and categories <!-- REVIEW: Tags field exists but filtering/display not implemented. See GAPS.md. -->
 
 - **Subscription System**
   - Automated payment processing
@@ -74,11 +74,13 @@ paywall:
 
 ```bash
 # Add a new creator
+# Note: Tier format is name:price_btc:price_xmr
 createon creator add johndoe \
   -n "John Doe" \
   -b "Digital Artist" \
   -t "Basic:0.0001:0.01" \
   -t "Premium:0.0005:0.05"
+<!-- REVIEW: Tier parsing has a bug - fmt.Sscanf with %s:%s:%s doesn't parse colons correctly. See pkg/cli/creator.go:62. -->
 
 # List all creators
 createon creator list

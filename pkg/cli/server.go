@@ -1,4 +1,3 @@
-// pkg/cli/server.go
 package cli
 
 import (
