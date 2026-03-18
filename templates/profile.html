@@ -1,0 +1,43 @@
+{{define "content"}}
+<div class="profile">
+    <header class="profile-header">
+        {{if .Creator.AvatarPath}}
+            <img src="/assets/avatars/{{.Creator.AvatarPath}}" alt="{{.Creator.DisplayName}}" class="avatar">
+        {{end}}
+        <h1>{{.Creator.DisplayName}}</h1>
+        <p class="username">@{{.Creator.Username}}</p>
+        <p class="bio">{{.Creator.Bio}}</p>
+        {{if .Creator.SocialLinks}}
+        <div class="social-links">
+            {{range .Creator.SocialLinks}}
+                <a href="{{.}}" target="_blank" rel="noopener">{{.}}</a>
+            {{end}}
+        </div>
+        {{end}}
+    </header>
+
+    <section class="tiers">
+        <h2>Support Tiers</h2>
+        <div class="tier-grid">
+        {{range .Creator.Tiers}}
+            <article class="tier-card">
+                <h3>{{.Name}}</h3>
+                <p class="description">{{.Description}}</p>
+                <div class="prices">
+                    <span class="price-btc">{{formatPrice .PriceBTC "BTC"}}</span>
+                    <span class="price-xmr">{{formatPrice .PriceXMR "XMR"}}</span>
+                </div>
+                {{if .Features}}
+                <ul class="features">
+                    {{range .Features}}
+                    <li>{{.}}</li>
+                    {{end}}
+                </ul>
+                {{end}}
+                <a href="/subscribe/{{$.Creator.Username}}/{{.ID}}" class="btn-subscribe">Subscribe</a>
+            </article>
+        {{end}}
+        </div>
+    </section>
+</div>
+{{end}}

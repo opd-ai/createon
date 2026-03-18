@@ -34,12 +34,6 @@ type TemplateConfig struct {
 	DevMode      bool
 }
 
-// User represents a logged-in user
-type User struct {
-	Email     string
-	CreatedAt time.Time
-}
-
 // NewManager creates a new template manager
 func NewManager(cfg TemplateConfig) (*Manager, error) {
 	// Initialize goldmark with extensions
@@ -86,11 +80,12 @@ func NewManager(cfg TemplateConfig) (*Manager, error) {
 	}, nil
 }
 
-// PageData holds common page data
+// PageData holds common page data for template rendering
 type PageData struct {
 	Title       string
 	Description string
 	Creator     *Creator
+	Post        *Post
 	User        *User
 	Content     interface{}
 	Flash       string

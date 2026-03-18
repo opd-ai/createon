@@ -49,6 +49,48 @@ func (m *Manager) getLock(path string) *sync.RWMutex {
 	return lock
 }
 
+// atomicWrite performs an atomic write operation using a temp file and rename
+func (m *Manager) atomicWrite(fullPath string, writeFunc func(*os.File) error) error {
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	success := false
+	defer func() {
+		if !success {
+			os.Remove(tmpPath)
+		}
+	}()
+
+	if err := writeFunc(tmpFile); err != nil {
+		tmpFile.Close()
+		return err
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, fullPath); err != nil {
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	success = true
+	return nil
+}
+
 // ReadYAML reads and parses a YAML file
 func (m *Manager) ReadYAML(path string, v interface{}) error {
 	fullPath := filepath.Join(m.rootDir, path)
@@ -79,49 +121,13 @@ func (m *Manager) WriteYAML(path string, v interface{}) error {
 	lock.Lock()
 	defer lock.Unlock()
 
-	// Create temporary file
-	dir := filepath.Dir(fullPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-
-	// Clean up temp file on failure
-	success := false
-	defer func() {
-		if !success {
-			os.Remove(tmpPath)
+	return m.atomicWrite(fullPath, func(f *os.File) error {
+		encoder := yaml.NewEncoder(f)
+		if err := encoder.Encode(v); err != nil {
+			return fmt.Errorf("failed to encode YAML: %w", err)
 		}
-	}()
-
-	// Write data
-	encoder := yaml.NewEncoder(tmpFile)
-	if err := encoder.Encode(v); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to encode YAML: %w", err)
-	}
-
-	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to sync file: %w", err)
-	}
-
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
-	}
-
-	// Atomic rename
-	if err := os.Rename(tmpPath, fullPath); err != nil {
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-
-	success = true
-	return nil
+		return nil
+	})
 }
 
 // ReadFile reads a file's contents
@@ -148,44 +154,12 @@ func (m *Manager) WriteFile(path string, data []byte) error {
 	lock.Lock()
 	defer lock.Unlock()
 
-	dir := filepath.Dir(fullPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-
-	success := false
-	defer func() {
-		if !success {
-			os.Remove(tmpPath)
+	return m.atomicWrite(fullPath, func(f *os.File) error {
+		if _, err := f.Write(data); err != nil {
+			return fmt.Errorf("failed to write data: %w", err)
 		}
-	}()
-
-	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to write data: %w", err)
-	}
-
-	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("failed to sync file: %w", err)
-	}
-
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, fullPath); err != nil {
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-
-	success = true
-	return nil
+		return nil
+	})
 }
 
 // ListFiles returns a list of files in a directory

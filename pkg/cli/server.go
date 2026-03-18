@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/opd-ai/createon"
+	"github.com/opd-ai/createon/pkg/auth"
 	"github.com/opd-ai/createon/pkg/files"
 	"github.com/opd-ai/createon/pkg/subscription"
 	"github.com/opd-ai/createon/pkg/templates"
@@ -45,6 +46,7 @@ type server struct {
 	files     *files.Manager
 	templates *templates.Manager
 	subs      *subscription.Manager
+	auth      *auth.Manager
 	paywall   *paywall.Paywall
 	router    *chi.Mux
 }
@@ -84,26 +86,36 @@ func runServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize template manager: %w", err)
 	}
 
+	// Parse payment timeout from config, default to 24 hours
+	paymentTimeout := 24 * time.Hour
+	if cfg.Paywall.Timeout != "" {
+		if parsed, err := time.ParseDuration(cfg.Paywall.Timeout); err == nil {
+			paymentTimeout = parsed
+		}
+	}
+
 	// Initialize paywall
 	pw, err := paywall.NewPaywall(paywall.Config{
 		TestNet:          cfg.Paywall.TestNet,
 		PriceInBTC:       cfg.Paywall.DefaultBTC,
 		PriceInXMR:       cfg.Paywall.DefaultXMR,
 		Store:            paywall.NewFileStore(),
-		PaymentTimeout:   24 * time.Hour,
+		PaymentTimeout:   paymentTimeout,
 		MinConfirmations: 1,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize paywall: %w", err)
 	}
 
-	sm := subscription.NewManager(fm, pw, cfg.DataDir)
+	sm := subscription.NewManager(fm, pw, cfg.DataDir, cfg)
+	am := auth.NewManager(fm, 24*time.Hour)
 
 	s := &server{
 		cfg:       cfg,
 		files:     fm,
 		templates: tm,
 		subs:      sm,
+		auth:      am,
 		paywall:   pw,
 		router:    chi.NewRouter(),
 	}
@@ -118,10 +130,19 @@ func (s *server) serve() error {
 	s.router.Use(middleware.RealIP)
 	s.router.Use(middleware.CleanPath)
 	s.router.Use(middleware.GetHead)
+	s.router.Use(s.auth.Middleware) // Add auth middleware
 
 	// Static files
 	fileServer := http.FileServer(http.Dir(s.cfg.AssetsDir))
 	s.router.Handle("/assets/*", http.StripPrefix("/assets/", fileServer))
+
+	// Auth routes
+	s.router.Get("/login", s.handleLoginPage())
+	s.router.Post("/login", s.handleLogin())
+	s.router.Get("/register", s.handleRegisterPage())
+	s.router.Post("/register", s.handleRegister())
+	s.router.Get("/logout", s.handleLogout())
+	s.router.Get("/dashboard", s.handleDashboard())
 
 	// Routes
 	s.router.Get("/", s.handleHome())
@@ -245,10 +266,26 @@ func (s *server) handleViewPost() http.HandlerFunc {
 			return
 		}
 
+		// Load creator info
+		var creator createon.Creator
+		if err := s.files.ReadYAML(
+			filepath.Join("creators", username, "config.yaml"),
+			&creator,
+		); err != nil {
+			http.Error(w, "Creator not found", http.StatusNotFound)
+			return
+		}
+
+		// Get user from session
+		user := auth.GetUserFromContext(r.Context())
+		userEmail := ""
+		if user != nil {
+			userEmail = user.Email
+		}
+
 		// Check access
-		// TODO: Implement user session management
-		if !s.subs.VerifyAccess(r.Context(), "user@example.com", username, meta.TierID) {
-			http.Error(w, "Access denied", http.StatusForbidden)
+		if userEmail == "" || !s.subs.VerifyAccess(r.Context(), userEmail, username, meta.TierID) {
+			http.Redirect(w, r, "/login?redirect="+r.URL.Path, http.StatusSeeOther)
 			return
 		}
 
@@ -260,9 +297,17 @@ func (s *server) handleViewPost() http.HandlerFunc {
 
 		s.templates.RenderPage(w, "post.html", templates.PageData{
 			Title:   meta.Title,
+			Creator: &creator,
+			Post:    &meta,
 			Content: template.HTML(html),
 		})
 	}
+}
+
+// PaymentPageData holds both tier and payment info for the payment template
+type PaymentPageData struct {
+	Tier    *createon.Tier
+	Payment interface{}
 }
 
 func (s *server) handleSubscribe() http.HandlerFunc {
@@ -270,9 +315,38 @@ func (s *server) handleSubscribe() http.HandlerFunc {
 		username := chi.URLParam(r, "username")
 		tierID := chi.URLParam(r, "tierID")
 
+		// Get user from session
+		user := auth.GetUserFromContext(r.Context())
+		if user == nil {
+			http.Redirect(w, r, "/login?redirect="+r.URL.Path, http.StatusSeeOther)
+			return
+		}
+
+		// Load creator to get tier info
+		var creator createon.Creator
+		if err := s.files.ReadYAML(
+			filepath.Join("creators", username, "config.yaml"),
+			&creator,
+		); err != nil {
+			http.Error(w, "Creator not found", http.StatusNotFound)
+			return
+		}
+
+		// Find the tier
+		var selectedTier *createon.Tier
+		for _, tier := range creator.Tiers {
+			if tier.ID == tierID {
+				selectedTier = &tier
+				break
+			}
+		}
+		if selectedTier == nil {
+			http.Error(w, "Tier not found", http.StatusNotFound)
+			return
+		}
+
 		// Create subscription
-		// TODO: Get user email from session
-		payment, err := s.subs.CreateSubscription(r.Context(), "user@example.com", username, tierID)
+		payment, err := s.subs.CreateSubscription(r.Context(), user.Email, username, tierID)
 		if err != nil {
 			http.Error(w, "Failed to create subscription", http.StatusInternalServerError)
 			return
@@ -280,7 +354,11 @@ func (s *server) handleSubscribe() http.HandlerFunc {
 
 		s.templates.RenderPage(w, "payment.html", templates.PageData{
 			Title:   "Subscribe",
-			Content: payment,
+			Creator: &creator,
+			Content: PaymentPageData{
+				Tier:    selectedTier,
+				Payment: payment,
+			},
 		})
 	}
 }
@@ -295,5 +373,122 @@ func (s *server) handleVerifyPayment() http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func (s *server) handleLoginPage() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.templates.RenderPage(w, "login.html", templates.PageData{
+			Title: "Login",
+		})
+	}
+}
+
+func (s *server) handleLogin() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		email := r.FormValue("email")
+		password := r.FormValue("password")
+
+		session, err := s.auth.Login(email, password)
+		if err != nil {
+			s.templates.RenderPage(w, "login.html", templates.PageData{
+				Title: "Login",
+				Flash: "Invalid email or password",
+			})
+			return
+		}
+
+		// Set session cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    session.Token,
+			Path:     "/",
+			Expires:  session.ExpiresAt,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+		})
+
+		// Redirect to dashboard or original page
+		redirect := r.URL.Query().Get("redirect")
+		if redirect == "" {
+			redirect = "/dashboard"
+		}
+		http.Redirect(w, r, redirect, http.StatusSeeOther)
+	}
+}
+
+func (s *server) handleRegisterPage() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.templates.RenderPage(w, "register.html", templates.PageData{
+			Title: "Register",
+		})
+	}
+}
+
+func (s *server) handleRegister() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		email := r.FormValue("email")
+		password := r.FormValue("password")
+
+		if err := s.auth.Register(email, password); err != nil {
+			s.templates.RenderPage(w, "register.html", templates.PageData{
+				Title: "Register",
+				Flash: "Registration failed: " + err.Error(),
+			})
+			return
+		}
+
+		// Auto-login after registration
+		session, err := s.auth.Login(email, password)
+		if err != nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    session.Token,
+			Path:     "/",
+			Expires:  session.ExpiresAt,
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+		})
+
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	}
+}
+
+func (s *server) handleLogout() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("session")
+		if err == nil && cookie.Value != "" {
+			s.auth.Logout(cookie.Value)
+		}
+
+		// Clear session cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+		})
+
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+}
+
+func (s *server) handleDashboard() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.GetUserFromContext(r.Context())
+		if user == nil {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		s.templates.RenderPage(w, "dashboard.html", templates.PageData{
+			Title: "Dashboard",
+			User:  &createon.User{Email: user.Email, PasswordHash: user.PasswordHash, CreatedAt: user.CreatedAt},
+		})
 	}
 }

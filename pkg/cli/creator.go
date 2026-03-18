@@ -47,7 +47,7 @@ func runAddCreator(cmd *cobra.Command, args []string) error {
 
 	fm, err := files.NewManager("data")
 	if err != nil {
-		return fmt.Errorf("File manager creation error: %w")
+		return fmt.Errorf("File manager creation error: %w", err)
 	}
 
 	// Create creator directory
@@ -97,7 +97,7 @@ func runAddCreator(cmd *cobra.Command, args []string) error {
 func runListCreators(cmd *cobra.Command, args []string) error {
 	fm, err := files.NewManager("data")
 	if err != nil {
-		return fmt.Errorf("File manager creation error: %w")
+		return fmt.Errorf("File manager creation error: %w", err)
 	}
 	creatorsDir := filepath.Join("data", "creators")
 

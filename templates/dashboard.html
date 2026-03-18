@@ -1,0 +1,28 @@
+{{define "content"}}
+<div class="dashboard">
+    <h1>Dashboard</h1>
+    
+    <section class="user-info">
+        <h2>Account</h2>
+        <p>Logged in as: {{.User.Email}}</p>
+        <p>Member since: {{.User.CreatedAt | timeAgo}}</p>
+    </section>
+
+    <section class="subscriptions">
+        <h2>Your Subscriptions</h2>
+        {{if .Content}}
+            <ul class="subscription-list">
+            {{range .Content}}
+                <li>
+                    <strong>{{.CreatorUser}}</strong> - {{.TierID}}
+                    <span class="expires">Expires: {{.ExpiresAt}}</span>
+                </li>
+            {{end}}
+            </ul>
+        {{else}}
+            <p>You don't have any active subscriptions.</p>
+            <p><a href="/">Browse creators</a> to get started!</p>
+        {{end}}
+    </section>
+</div>
+{{end}}

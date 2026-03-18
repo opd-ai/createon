@@ -1,0 +1,28 @@
+{{define "content"}}
+<div class="home">
+    <header class="hero">
+        <h1>Createon</h1>
+        <p>Support your favorite creators with cryptocurrency</p>
+    </header>
+
+    <section class="creators">
+        <h2>Creators</h2>
+        {{if .Content}}
+            <div class="creator-grid">
+            {{range .Content}}
+                <article class="creator-card">
+                    <a href="/c/{{.Username}}">
+                        <h3>{{.DisplayName}}</h3>
+                        <p>@{{.Username}}</p>
+                        <p class="bio">{{.Bio}}</p>
+                        <span class="tier-count">{{len .Tiers}} tiers available</span>
+                    </a>
+                </article>
+            {{end}}
+            </div>
+        {{else}}
+            <p>No creators found. Check back soon!</p>
+        {{end}}
+    </section>
+</div>
+{{end}}

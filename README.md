@@ -165,6 +165,21 @@ go test ./...
 - Regularly backup your data directory
 - Monitor payment verification logs
 
+### Bitcoin Node Compatibility
+
+This project uses btcd v0.24.2 as a dependency. If you are running your own Bitcoin node for payment processing:
+
+- **Minimum btcd version**: v0.24.2 (fixes CVE-2024-38365)
+- **Bitcoin Core**: Version 25.0 or later recommended
+- Ensure your node is fully synced before processing payments
+- Keep your Bitcoin node software updated to the latest stable version
+
+### Monero Node Compatibility
+
+- **Minimum Monero version**: v0.18.4.0 or later
+- Use the official Monero daemon or compatible forks
+- Configure RPC authentication for production deployments
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

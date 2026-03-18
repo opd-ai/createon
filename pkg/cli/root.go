@@ -1,4 +1,5 @@
-// pkg/cli/root.go
+// Package cli provides the command-line interface for the Createon platform.
+// It implements commands for server management, creator management, and content operations.
 package cli
 
 import (
@@ -12,6 +13,9 @@ var rootCmd = &cobra.Command{
 Complete platform management through command line interface.`,
 }
 
+// Execute runs the root command and handles command-line argument parsing.
+// It is the main entry point for the CLI application.
+// Returns an error if command execution fails.
 func Execute() error {
 	return rootCmd.Execute()
 }

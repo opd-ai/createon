@@ -3,15 +3,18 @@
     <h1>Subscribe to {{.Creator.DisplayName}}</h1>
     
     <div class="tier-details">
-        <h2>{{.Content.Name}}</h2>
-        <p>{{.Content.Description}}</p>
-        <div class="price">
-            {{.Content.PriceBTC | formatPrice "BTC"}}
+        <h2>{{.Content.Tier.Name}}</h2>
+        <p>{{.Content.Tier.Description}}</p>
+        <div class="prices">
+            <span class="price-btc">{{formatPrice .Content.Tier.PriceBTC "BTC"}}</span>
+            <span class="price-xmr">{{formatPrice .Content.Tier.PriceXMR "XMR"}}</span>
         </div>
     </div>
     
     <div class="payment-info" id="payment-details">
-        <!-- Populated via JavaScript -->
+        <h3>Payment Options</h3>
+        <p>Complete your payment using one of the following addresses:</p>
+        <!-- Payment addresses will be shown here via JavaScript or server-rendered -->
     </div>
 </div>
 

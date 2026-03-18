@@ -1,0 +1,17 @@
+{{define "content"}}
+<div class="auth-form">
+    <h1>Login</h1>
+    <form method="POST" action="/login">
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+        </div>
+        <button type="submit">Login</button>
+    </form>
+    <p>Don't have an account? <a href="/register">Register</a></p>
+</div>
+{{end}}

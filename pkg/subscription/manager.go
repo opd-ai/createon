@@ -15,17 +15,21 @@ import (
 	"github.com/opd-ai/paywall"
 )
 
+// Manager handles subscription lifecycle and payment processing
 type Manager struct {
 	files   *files.Manager
 	paywall *paywall.Paywall
 	dataDir string
+	cfg     *Config
 }
 
-func NewManager(files *files.Manager, pw *paywall.Paywall, dataDir string) *Manager {
+// NewManager creates a new subscription manager with the given configuration
+func NewManager(files *files.Manager, pw *paywall.Paywall, dataDir string, cfg *Config) *Manager {
 	return &Manager{
 		files:   files,
 		paywall: pw,
 		dataDir: dataDir,
+		cfg:     cfg,
 	}
 }
 
@@ -50,14 +54,28 @@ func (m *Manager) CreateSubscription(ctx context.Context, email, creatorUser, ti
 		return nil, fmt.Errorf("tier not found: %s", tierID)
 	}
 
+	// Parse timeout duration from config, default to 24 hours
+	timeout := 24 * time.Hour
+	if m.cfg != nil && m.cfg.Paywall.Timeout != "" {
+		if parsed, err := time.ParseDuration(m.cfg.Paywall.Timeout); err == nil {
+			timeout = parsed
+		}
+	}
+
+	// Determine testnet mode from config
+	testNet := true // default to testnet for safety
+	if m.cfg != nil {
+		testNet = m.cfg.Paywall.TestNet
+	}
+
 	// Configure paywall for this subscription with both BTC and XMR
 	var err error
 	m.paywall, err = paywall.NewPaywall(paywall.Config{
 		PriceInBTC:       selectedTier.PriceBTC,
 		PriceInXMR:       selectedTier.PriceXMR,
-		TestNet:          true, // TODO: Make configurable
+		TestNet:          testNet,
 		Store:            paywall.NewFileStore(),
-		PaymentTimeout:   24 * time.Hour,
+		PaymentTimeout:   timeout,
 		MinConfirmations: 1,
 		// XMR configuration
 		XMRUser:     m.getXMRConfig().RPCUser,
@@ -65,7 +83,7 @@ func (m *Manager) CreateSubscription(ctx context.Context, email, creatorUser, ti
 		XMRRPC:      m.getXMRConfig().RPCURL,
 	})
 	if err != nil {
-		return nil, fmt.Errorf(" : %w", err)
+		return nil, fmt.Errorf("failed to configure paywall: %w", err)
 	}
 
 	// Generate payment request with both BTC and XMR addresses
@@ -104,34 +122,36 @@ func (m *Manager) CreateSubscription(ctx context.Context, email, creatorUser, ti
 }
 
 func (m *Manager) getXMRConfig() wallet.MoneroConfig {
+	// Default values
+	host := "http://127.0.0.1:18081"
+	user := ""
+	password := ""
+
+	// Use config values if available
+	if m.cfg != nil {
+		if m.cfg.Paywall.XMRHost != "" {
+			host = m.cfg.Paywall.XMRHost
+		}
+		if m.cfg.Paywall.XMRUser != "" {
+			user = m.cfg.Paywall.XMRUser
+		}
+		if m.cfg.Paywall.XMRPassword != "" {
+			password = m.cfg.Paywall.XMRPassword
+		}
+	}
+
 	return wallet.MoneroConfig{
-		RPCURL:      "http://127.0.0.1:18081", // Default local node
-		RPCUser:     "",                       // Default no auth
-		RPCPassword: "",                       // Default no auth
+		RPCURL:      host,
+		RPCUser:     user,
+		RPCPassword: password,
 	}
 }
 
-// ProcessPayment handles payment confirmation using the middleware's store
-func (m *Manager) ProcessPayment(ctx context.Context, paymentID string) error {
-	// Get payment from paywall's store
-	payment, err := m.paywall.Store.GetPayment(paymentID)
-	if err != nil {
-		return fmt.Errorf("failed to get payment: %w", err)
-	}
-
-	if payment == nil {
-		return fmt.Errorf("payment not found: %s", paymentID)
-	}
-
-	// Check if either BTC or XMR payment is confirmed
-	if payment.Status != paywall.StatusConfirmed {
-		return fmt.Errorf("payment not confirmed: %s", paymentID)
-	}
-
-	// Find and update subscription
+// findSubscriptionByPaymentID searches for a subscription containing the given payment ID
+func (m *Manager) findSubscriptionByPaymentID(paymentID string) (*Subscription, int, error) {
 	subs, err := m.files.ListFiles("subscriptions")
 	if err != nil {
-		return fmt.Errorf("failed to list subscriptions: %w", err)
+		return nil, -1, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
 	for _, subFile := range subs {
@@ -140,33 +160,58 @@ func (m *Manager) ProcessPayment(ctx context.Context, paymentID string) error {
 			continue
 		}
 
-		// Find matching payment
 		for i, p := range sub.Payments {
 			if p.ID == paymentID {
-				// Update payment status
-				sub.Payments[i].Status = "confirmed"
-
-				// Store transaction IDs for both currencies if available
-				if payment.TransactionID != "" {
-					// Determine which currency was used
-					if _, ok := payment.Amounts[wallet.Bitcoin]; ok {
-						sub.Payments[i].TxID[wallet.Bitcoin] = payment.TransactionID
-					}
-					if _, ok := payment.Amounts[wallet.Monero]; ok {
-						sub.Payments[i].TxID[wallet.Monero] = payment.TransactionID
-					}
-				}
-
-				// Save updated subscription
-				if err := m.files.WriteYAML(filepath.Join("subscriptions", sub.ID+".yaml"), sub); err != nil {
-					return fmt.Errorf("failed to save subscription: %w", err)
-				}
-				return nil
+				return &sub, i, nil
 			}
 		}
 	}
 
-	return fmt.Errorf("subscription not found for payment: %s", paymentID)
+	return nil, -1, fmt.Errorf("subscription not found for payment: %s", paymentID)
+}
+
+// updatePaymentStatus updates a subscription's payment status with transaction info
+func (m *Manager) updatePaymentStatus(sub *Subscription, paymentIndex int, transactionID string, amounts map[wallet.WalletType]float64) error {
+	sub.Payments[paymentIndex].Status = "confirmed"
+
+	if transactionID != "" {
+		if sub.Payments[paymentIndex].TxID == nil {
+			sub.Payments[paymentIndex].TxID = make(map[wallet.WalletType]string)
+		}
+		if _, ok := amounts[wallet.Bitcoin]; ok {
+			sub.Payments[paymentIndex].TxID[wallet.Bitcoin] = transactionID
+		}
+		if _, ok := amounts[wallet.Monero]; ok {
+			sub.Payments[paymentIndex].TxID[wallet.Monero] = transactionID
+		}
+	}
+
+	return m.files.WriteYAML(filepath.Join("subscriptions", sub.ID+".yaml"), sub)
+}
+
+// ProcessPayment handles payment confirmation using the middleware's store
+func (m *Manager) ProcessPayment(ctx context.Context, paymentID string) error {
+	payment, err := m.paywall.Store.GetPayment(paymentID)
+	if err != nil {
+		return fmt.Errorf("failed to get payment: %w", err)
+	}
+	if payment == nil {
+		return fmt.Errorf("payment not found: %s", paymentID)
+	}
+	if payment.Status != paywall.StatusConfirmed {
+		return fmt.Errorf("payment not confirmed: %s", paymentID)
+	}
+
+	sub, paymentIndex, err := m.findSubscriptionByPaymentID(paymentID)
+	if err != nil {
+		return err
+	}
+
+	if err := m.updatePaymentStatus(sub, paymentIndex, payment.TransactionID, payment.Amounts); err != nil {
+		return fmt.Errorf("failed to save subscription: %w", err)
+	}
+
+	return nil
 }
 
 // VerifyAccess checks if a subscriber has access to content
