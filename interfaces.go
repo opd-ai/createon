@@ -20,12 +20,17 @@ type FileManager interface {
 
 // ContentManager handles post operations for creator content.
 // It provides methods for creating, reading, updating, and deleting posts.
+// All post operations support versioning - updates create new versions.
 type ContentManager interface {
 	CreatePost(ctx context.Context, username, title string, content []byte, post Post) error
 	GetPost(ctx context.Context, username, postID string) (*Post, []byte, error)
 	ListPosts(ctx context.Context, username string, filter PostFilter) ([]Post, error)
 	UpdatePost(ctx context.Context, username, postID string, content []byte, post Post) error
 	DeletePost(ctx context.Context, username, postID string) error
+	// GetPostVersion retrieves a specific version of a post
+	GetPostVersion(ctx context.Context, username, postID string, version int) (*Post, []byte, error)
+	// ListPostVersions returns all versions of a post with metadata
+	ListPostVersions(ctx context.Context, username, postID string) ([]PostVersion, error)
 }
 
 // SubscriptionManager handles subscriptions and cryptocurrency payments.

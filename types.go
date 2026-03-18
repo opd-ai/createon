@@ -33,15 +33,26 @@ type Tier struct {
 
 // Post represents a content post created by a creator.
 // Posts contain markdown content and are associated with a specific tier for access control.
+// Posts support versioning - each update creates a new version while preserving history.
 type Post struct {
 	ID        string    `yaml:"id" validate:"required"`
 	Title     string    `yaml:"title" validate:"required"`
 	TierID    string    `yaml:"tier_id" validate:"required"`
 	Content   string    `yaml:"content" validate:"required"`
 	Tags      []string  `yaml:"tags"`
+	Version   int       `yaml:"version"`
 	CreatedAt time.Time `yaml:"created_at"`
 	UpdatedAt time.Time `yaml:"updated_at"`
 	Published bool      `yaml:"published"`
+}
+
+// PostVersion represents a specific version of a post with its content.
+type PostVersion struct {
+	Version   int       `yaml:"version"`
+	Content   []byte    `yaml:"-"`
+	Title     string    `yaml:"title"`
+	UpdatedAt time.Time `yaml:"updated_at"`
+	Size      int64     `yaml:"size"`
 }
 
 // Subscription represents a user's active subscription to a creator's tier.
